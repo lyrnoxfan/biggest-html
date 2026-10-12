@@ -21,13 +21,6 @@ python3 gen/build.py --data /path/to/data --out worker/chunks \
 python3 -m unittest discover -s tests -v
 ```
 
-部署前先运行生成器；它会清理上次构建遗留的编号分片，并生成 Worker 所需的清单。原始数据与分片仍按设计不提交到 Git：
-
-```bash
-python3 gen/build.py --data /path/to/data --out worker/chunks \\
-    --worker-src worker/src --chunk-mib 20 --pi-digits 100000
-```
-
 部署（需 Cloudflare API token 作 `CLOUDFLARE_API_TOKEN`）：
 
 ```bash
