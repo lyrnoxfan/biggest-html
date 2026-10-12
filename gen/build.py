@@ -481,11 +481,15 @@ const DPR2=Math.min(2,window.devicePixelRatio||1);
 const cv=$2('earthCv'),ctx=cv.getContext('2d');let W,H,cx,cy,R;
 function resize(){W=cv.width=Math.floor(cv.offsetWidth*DPR2);H=cv.height=(cv.getAttribute('height')|0)*DPR2;cx=W/2;cy=H/2;R=Math.max(10,Math.min(W,H)/2-14*DPR2);}
 resize();window.addEventListener('resize',resize);
-let ang=0,frame=0,lastFrame=0,sourceCount=-1,places=[];
+let ang=0,frame=0,lastFrame=0,sourceCount=-1;
 const RAD=Math.PI/180;
 function preparePlaces(){
  if(sourceCount===C.length)return;
- places=C.map(c=>{const lat=c[0]*RAD;return {cosLat:Math.cos(lat),sinLat:Math.sin(lat),lon:c[1]*RAD,pop:c[2]};});
+ const start=Math.max(0,sourceCount);
+ for(let i=start;i<C.length;i++){
+  const c=C[i],lat=c[0]*RAD;
+  c[0]=lat;c[1]*=RAD;c[4]=Math.cos(lat);c[5]=Math.sin(lat);
+ }
  sourceCount=C.length;
 }
 function draw(now){
@@ -501,15 +505,15 @@ function draw(now){
  if(lastFrame)ang+=Math.min(50,now-lastFrame)*0.00012;
  lastFrame=now;frame++;
  const oldCount=sourceCount;preparePlaces();
- for(const c of places){
-  const lo=c.lon+ang,X=c.cosLat*Math.sin(lo),Y=c.sinLat,Z=c.cosLat*Math.cos(lo);
+ for(let i=0;i<C.length;i++){
+  const c=C[i],lo=c[1]+ang,X=c[4]*Math.sin(lo),Y=c[5],Z=c[4]*Math.cos(lo);
   if(Z<=0.02)continue;
-  const sx=cx+R*X,sy=cy-R*Y,a=0.2+0.8*Z;
-  const s=(c.pop>1000000?2.6:c.pop>100000?1.9:c.pop>10000?1.4:1)*DPR2/1.4;
-  ctx.fillStyle=c.pop>1000000?('rgba(240,171,252,'+a.toFixed(2)+')'):('rgba(125,211,252,'+a.toFixed(2)+')');
+  const sx=cx+R*X,sy=cy-R*Y,a=0.2+0.8*Z,pop=c[2];
+  const s=(pop>1000000?2.6:pop>100000?1.9:pop>10000?1.4:1)*DPR2/1.4;
+  ctx.fillStyle=pop>1000000?('rgba(240,171,252,'+a.toFixed(2)+')'):('rgba(125,211,252,'+a.toFixed(2)+')');
   ctx.fillRect(sx,sy,s,s);
  }
- if(frame%20===0||oldCount!==sourceCount)$2('cityCount').textContent='已载入 '+places.length.toLocaleString()+' 个居民点';
+ if(frame%20===0||oldCount!==sourceCount)$2('cityCount').textContent='已载入 '+C.length.toLocaleString()+' 个居民点';
 }
 animateOnScreen(cv,draw);
 })();
