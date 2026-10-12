@@ -1,4 +1,4 @@
-import { CHUNKS } from "./chunks.js";
+import { CHUNKS, TOTAL_BYTES } from "./chunks.js";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -145,6 +145,7 @@ export default {
     const headers = {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
+      "content-length": String(TOTAL_BYTES),
       "x-content-type-options": "nosniff",
       "referrer-policy": "strict-origin-when-cross-origin",
       "x-biggest-html-chunks": String(CHUNKS.length),
