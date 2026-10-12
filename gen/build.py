@@ -522,39 +522,55 @@ const DPR3=Math.min(2,window.devicePixelRatio||1);
 /* ---------- mandelbrot ---------- */
 (function(){
 const cv=$2b('mandelCv'),ctx=cv.getContext('2d');
-let W,H;const home={x:-0.5,y:0,r:1.7};let view={...home},touring=false,tourT=null;
-function resize(){W=cv.width=Math.floor(cv.offsetWidth*DPR3);H=cv.height=(cv.getAttribute('height')|0)*DPR3;render();}
+let W=0,H=0,renderVersion=0;
+const home={x:-0.5,y:0,r:1.7};let view={...home},touring=false,tourT=null;
+function resize(){
+ const cssW=Math.max(1,cv.offsetWidth),cssH=Math.max(1,Number(cv.getAttribute('height'))||440);
+ const scale=Math.min(DPR3,Math.sqrt(400000/(cssW*cssH)));
+ W=cv.width=Math.max(1,Math.floor(cssW*scale));H=cv.height=Math.max(1,Math.floor(cssH*scale));
+ render();
+}
 function render(){
+ const version=++renderVersion,w=W,h=H,current={...view};
+ if(!w||!h)return;
  $2b('mandelInfo').textContent='渲染中…';
- setTimeout(()=>{
- const img=ctx.createImageData(W,H),d=img.data,maxI=140;
- for(let py=0;py<H;py++){
-  const ci=view.y+(py/H-0.5)*2*view.r;
-  for(let px=0;px<W;px++){
-   const cr=view.x+(px/W-0.5)*2*view.r*(W/H);
-   let zr=0,zi=0,it=0;
-   while(zr*zr+zi*zi<4&&it<maxI){const t=zr*zr-zi*zi+cr;zi=2*zr*zi+ci;zr=t;it++;}
-   const k=(py*W+px)*4;
-   if(it>=maxI){d[k]=d[k+1]=d[k+2]=4;}
-   else{const t=it/maxI;
-    d[k]=Math.floor(9*(1-t)*t*t*t*255);d[k+1]=Math.floor(15*(1-t)*(1-t)*t*t*255);d[k+2]=Math.floor(8.5*(1-t)*(1-t)*(1-t)*t*255);}
-   d[k+3]=255;
-  }}
- ctx.putImageData(img,0,0);
- $2b('mandelInfo').textContent='中心 '+view.x.toFixed(6)+' , '+view.y.toFixed(6)+'　放大 '+(home.r/view.r).toFixed(1)+'×';
- },30);
+ const img=ctx.createImageData(w,h),d=img.data,maxI=100;
+ let py=0;
+ function paintBatch(){
+  if(version!==renderVersion)return;
+  const end=Math.min(py+8,h);
+  for(let y=py;y<end;y++){
+   const ci=current.y+(y/h-0.5)*2*current.r;
+   for(let x=0;x<w;x++){
+    const cr=current.x+(x/w-0.5)*2*current.r*(w/h);
+    let zr=0,zi=0,it=0;
+    while(zr*zr+zi*zi<4&&it<maxI){const t=zr*zr-zi*zi+cr;zi=2*zr*zi+ci;zr=t;it++;}
+    const k=(y*w+x)*4;
+    if(it>=maxI){d[k]=d[k+1]=d[k+2]=4;}
+    else{const t=it/maxI;
+     d[k]=Math.floor(9*(1-t)*t*t*t*255);d[k+1]=Math.floor(15*(1-t)*(1-t)*t*t*255);d[k+2]=Math.floor(8.5*(1-t)*(1-t)*(1-t)*t*255);}
+    d[k+3]=255;
+   }
+  }
+  ctx.putImageData(img,0,0,0,py,w,end-py);
+  py=end;
+  if(py<h){requestAnimationFrame(paintBatch);return;}
+  $2b('mandelInfo').textContent='中心 '+current.x.toFixed(6)+' , '+current.y.toFixed(6)+'　放大 '+(home.r/current.r).toFixed(1)+'×';
+ }
+ requestAnimationFrame(paintBatch);
 }
 cv.addEventListener('click',e=>{
  const r=cv.getBoundingClientRect(),px=(e.clientX-r.left)/r.width,py=(e.clientY-r.top)/r.height;
  view.x+=(px-0.5)*2*view.r*(W/H);view.y+=(py-0.5)*2*view.r;view.r/=2.2;render();});
 cv.addEventListener('dblclick',()=>{view={...home};render();});
 $2b('mandelReset').onclick=()=>{stopTour();view={...home};render();};
-function stopTour(){touring=false;$2b('mandelTour').textContent='自动巡游';if(tourT)clearInterval(tourT);}
+function stopTour(){touring=false;$2b('mandelTour').textContent='自动巡游';if(tourT!==null){clearInterval(tourT);tourT=null;}}
 $2b('mandelTour').onclick=()=>{
  if(touring){stopTour();return;}
  touring=true;$2b('mandelTour').textContent='停止巡游';
  view={x:-0.745,y:0.113,r:1.2};render();
  tourT=setInterval(()=>{if(!touring)return;view.r*=0.82;if(view.r<1e-6){stopTour();view={...home};}render();},900);};
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopTour();});
 window.addEventListener('resize',resize);resize();
 })();
 
@@ -640,10 +656,11 @@ function tone(f,t,dur){
 }
 function drawVis(an){
  const cv=$3('musicCv'),ctx=cv.getContext('2d');
- const W=cv.width=cv.offsetWidth*DPR,H=cv.height=(cv.getAttribute('height')|0)*DPR;
- const data=new Uint8Array(an.frequencyBinCount);
- (function tick(){
-  requestAnimationFrame(tick);
+ let W=0,H=0,raf=0;const data=new Uint8Array(an.frequencyBinCount);
+ function resize(){W=cv.width=Math.floor(cv.offsetWidth*DPR);H=cv.height=(cv.getAttribute('height')|0)*DPR;}
+ function tick(){
+  raf=0;
+  if(!playing||document.hidden)return;
   an.getByteFrequencyData(data);
   ctx.clearRect(0,0,W,H);
   const n=64,bw=W/n;
@@ -651,22 +668,30 @@ function drawVis(an){
    const h=Math.max(2,v*H*0.92);
    const gr=ctx.createLinearGradient(0,H,0,H-h);gr.addColorStop(0,'#38bdf8');gr.addColorStop(1,'#f0abfc');
    ctx.fillStyle=gr;ctx.fillRect(i*bw+1,H-h,bw-2,h);}
- })();
+  raf=requestAnimationFrame(tick);
+ }
+ resize();window.addEventListener('resize',resize);
+ return function(active){
+  if(active&&!document.hidden&&!raf)raf=requestAnimationFrame(tick);
+  else if(!active&&raf){cancelAnimationFrame(raf);raf=0;}
+ };
 }
-let visStarted=false;
+let visControl=null;
+document.addEventListener('visibilitychange',()=>{if(visControl)visControl(playing);});
 $3('playBtn').onclick=()=>{
  const ac=ensure();ac.resume();
- if(playing){timers.forEach(clearTimeout);timers=[];playing=false;$3('playBtn').textContent='▶ 播放《星海》';$3('nowPlaying').textContent='已停止';return;}
+ if(playing){timers.forEach(clearTimeout);timers=[];playing=false;if(visControl)visControl(false);$3('playBtn').textContent='▶ 播放《星海》';$3('nowPlaying').textContent='已停止';return;}
  if(!actx._an){actx._an=ac.createAnalyser();actx._an.fftSize=256;actx._an.connect(ac.destination);}
- if(!visStarted){visStarted=true;drawVis(actx._an);}
- playing=true;$3('playBtn').textContent='⏸ 停止';
- const beat=60/SONG_META.bpm;let t=ac.currentTime+0.1,total=0;
+ if(!visControl)visControl=drawVis(actx._an);
+ playing=true;visControl(true);$3('playBtn').textContent='⏸ 停止';
+ const beat=60/SONG_META.bpm;let t=ac.currentTime+0.1;
  SONG.forEach((nd,i)=>{
   const f=noteHz(nd[0]),dur=nd[1]*beat;
-  tone(f,t,dur*1.8);total=t-ac.currentTime;
+  tone(f,t,dur*1.8);
   timers.push(setTimeout(()=>{$3('nowPlaying').textContent='♪ '+nd[0]+'  ('+(i+1)+'/'+SONG.length+')';},(t-ac.currentTime)*1000));
   t+=dur;});
- timers.push(setTimeout(()=>{playing=false;$3('playBtn').textContent='▶ 播放《星海》';$3('nowPlaying').textContent='演奏完毕 · 全曲 '+total.toFixed(1)+' 秒';},(t-ac.currentTime)*1000+300));
+ const total=t-ac.currentTime;
+ timers.push(setTimeout(()=>{playing=false;if(visControl)visControl(false);$3('playBtn').textContent='▶ 播放《星海》';$3('nowPlaying').textContent='演奏完毕 · 全曲 '+total.toFixed(1)+' 秒';timers=[];},(t-ac.currentTime)*1000+300));
 };
 })();
 /* ---------- world clocks ---------- */
@@ -676,13 +701,19 @@ const grid=$3('clockGrid');const cells=ZONES.map(z=>{
  const d=document.createElement('div');d.className='clock';
  d.innerHTML='<div class="t">--:--:--</div><div class="c">'+z[0]+'</div><div class="z">'+z[1]+'</div>';
  grid.appendChild(d);return d;});
+const formatters=ZONES.map(z=>{
+ try{return new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZone:z[1]});}
+ catch(e){return null;}
+});
 function tick(){
  const now=new Date();
- ZONES.forEach((z,i)=>{
-  try{cells[i].querySelector('.t').textContent=new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZone:z[1]}).format(now);}
-  catch(e){cells[i].querySelector('.t').textContent='N/A';}});
+ cells.forEach((cell,i)=>{const formatter=formatters[i];cell.querySelector('.t').textContent=formatter?formatter.format(now):'N/A';});
 }
-tick();setInterval(tick,1000);
+tick();let timer=setInterval(tick,1000);
+document.addEventListener('visibilitychange',()=>{
+ if(document.hidden){clearInterval(timer);timer=null;}
+ else if(timer===null){tick();timer=setInterval(tick,1000);}
+});
 })();
 /* ---------- header chips + footer stats (filled by generator) ---------- */
 (function(){
