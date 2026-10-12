@@ -1,6 +1,7 @@
 worker/chunks/
 worker/src/chunks.js
 worker/node_modules/
+worker/.wrangler/
 data/
 __pycache__/
 *.pyc
