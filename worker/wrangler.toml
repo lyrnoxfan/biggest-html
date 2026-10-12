@@ -1,0 +1,8 @@
+name = "biggest-html"
+main = "src/index.js"
+compatibility_date = "2026-10-12"
+
+[assets]
+directory = "./chunks"
+binding = "ASSETS"
+not_found_handling = "none"
