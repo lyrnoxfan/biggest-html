@@ -15,6 +15,12 @@ python3 gen/build.py --data /path/to/data --out worker/chunks \
     --worker-src worker/src [--max-cities N] [--pi-digits 100000] [--chunk-mib 20]
 ```
 
+测试（仅需 Python 3）：
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
 部署（需 Cloudflare API token 作 `CLOUDFLARE_API_TOKEN`）：
 
 ```bash

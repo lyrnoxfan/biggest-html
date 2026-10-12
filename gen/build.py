@@ -24,6 +24,10 @@ class ChunkWriter:
         self.outdir = outdir
         self.max_bytes = max_bytes
         os.makedirs(outdir, exist_ok=True)
+        # A smaller rebuild must not leave old numbered chunks in the asset directory.
+        for name in os.listdir(outdir):
+            if name.startswith("chunk-") and name.endswith(".html") and name[6:-5].isdigit():
+                os.remove(os.path.join(outdir, name))
         self.files = []
         self.cur = None
         self.cur_size = 0
@@ -228,7 +232,23 @@ footer .big{font-size:15px;color:var(--fg);margin-bottom:10px}
 .stat{display:inline-block;margin:6px 10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 18px}
 .stat b{color:var(--acc);font-size:17px}
 .sig{margin-top:22px;font-size:14px;color:var(--acc2);letter-spacing:3px}
-@media(max-width:640px){nav a{font-size:12px;padding:6px 9px}.hero .sub{margin-top:44vh}}
+@media(max-width:640px){
+ nav{top:8px;padding:5px 7px;max-width:calc(100vw - 16px)}
+ nav a{font-size:12px;padding:6px 9px}
+ section.block{padding:84px 14px 28px}
+ .panel{padding:12px;border-radius:16px}
+ .row{gap:12px}
+ .hero .sub{margin-top:44vh;font-size:12px;letter-spacing:1px;padding:0 16px}
+ .chips{gap:6px}
+ .chip{padding:6px 10px;font-size:11px}
+ .hzgrid{grid-template-columns:repeat(auto-fill,minmax(48px,1fr));gap:6px}
+ .clock .t{font-size:21px}
+}
+@media(prefers-reduced-motion:reduce){
+ html{scroll-behavior:auto}
+ .scrolldown{animation:none}
+ nav a,button.btn,.hz{transition:none}
+}
 </style>
 </head>
 <body>
@@ -307,6 +327,40 @@ JS_APP_1 = r"""
 "use strict";
 const $=id=>document.getElementById(id);
 const DPR=Math.min(2,window.devicePixelRatio||1);
+const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function animateOnScreen(element, draw) {
+ let visible = !("IntersectionObserver" in window), raf = 0, last = 0, drawn = false;
+ function tick(now) {
+  raf = 0;
+  if (!visible || document.hidden || (REDUCED_MOTION && drawn)) return;
+  if (!REDUCED_MOTION && now - last < 32) { raf = requestAnimationFrame(tick); return; }
+  last = now;
+  drawn = true;
+  draw(now);
+  if (!REDUCED_MOTION) raf = requestAnimationFrame(tick);
+ }
+ function sync() {
+  if (visible && !document.hidden) {
+   if (!raf && !(REDUCED_MOTION && drawn)) raf = requestAnimationFrame(tick);
+  } else if (raf) {
+   cancelAnimationFrame(raf);
+   raf = 0;
+  }
+ }
+ const observer = "IntersectionObserver" in window
+  ? new IntersectionObserver(entries => { visible = entries.some(entry => entry.isIntersecting); sync(); }, {rootMargin:"100px"})
+  : null;
+ if (observer) observer.observe(element);
+ document.addEventListener("visibilitychange", sync);
+ window.addEventListener("resize", () => { drawn = false; sync(); }, {passive:true});
+ window.addEventListener("biggest:data-ready", () => { drawn = false; sync(); });
+ sync();
+ return () => {
+  if (raf) cancelAnimationFrame(raf);
+  if (observer) observer.disconnect();
+  document.removeEventListener("visibilitychange", sync);
+ };
+}
 /* ---------- nav highlight ---------- */
 (function(){const links=[...document.querySelectorAll('#nav a')];
 const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
@@ -338,7 +392,7 @@ function build(){
 }
 let mx=-1e4,my=-1e4;
 cv.parentElement.addEventListener('pointermove',e=>{const r=cv.getBoundingClientRect();mx=(e.clientX-r.left)*DPR;my=(e.clientY-r.top)*DPR;});
-(function tick(){
+function tick(){
  ctx.clearRect(0,0,W,H);
  for(const p of ps){
   p.x+=(p.tx-p.x)*0.055;p.y+=(p.ty-p.y)*0.055;
@@ -346,8 +400,9 @@ cv.parentElement.addEventListener('pointermove',e=>{const r=cv.getBoundingClient
   if(md<R&&md>1){p.x+=dx/md*3;p.y+=dy/md*3;}
   ctx.fillStyle='hsla('+p.hue+',85%,68%,0.9)';ctx.fillRect(p.x,p.y,p.s,p.s);
  }
- requestAnimationFrame(tick);})();
+}
 window.addEventListener('resize',build);build();
+animateOnScreen(cv.parentElement,tick);
 })();
 /* ---------- planetarium ---------- */
 const PLANETS=[
@@ -366,13 +421,19 @@ function orbitR(p){return 46+Math.min(W,H)/2*0.42*(Math.log10(p.au)-lmin)/(lmax-
 function planetR(p){return 3+9*Math.log10(p.d/1000)/Math.log10(140);}
 function resize(){W=cv.width=cv.offsetWidth*DPR;H=cv.height=(cv.getAttribute('height')|0)*DPR;cx=W/2;cy=H/2;}
 resize();window.addEventListener('resize',resize);
-let pos=[];
+let pos=[],starLayer=null,starLength=-1,starW=0,starH=0;
 function draw(t){
  ctx.clearRect(0,0,W,H);
- /* stars (HYG, ra->x dec->y) */
- for(let i=0;i<S.length;i++){const s=S[i];
-  const x=(s[0]/360)*W,y=((90-s[1])/180)*H,a=Math.max(0.08,0.9-(s[2]+1.5)/8);
-  ctx.fillStyle='rgba(255,255,255,'+a.toFixed(2)+')';ctx.fillRect(x,y,1.4,1.4);}
+ if(!W||!H)return;
+ if(!starLayer||starLength!==S.length||starW!==W||starH!==H){
+  starLayer=document.createElement('canvas');starLayer.width=W;starLayer.height=H;
+  const starCtx=starLayer.getContext('2d');
+  for(let i=0;i<S.length;i++){const s=S[i];
+   const x=(s[0]/360)*W,y=((90-s[1])/180)*H,a=Math.max(0.08,0.9-(s[2]+1.5)/8);
+   starCtx.fillStyle='rgba(255,255,255,'+a.toFixed(2)+')';starCtx.fillRect(x,y,1.4,1.4);}
+  starLength=S.length;starW=W;starH=H;
+ }
+ ctx.drawImage(starLayer,0,0);
  /* sun */
  const g=ctx.createRadialGradient(cx,cy,0,cx,cy,34*DPR);
  g.addColorStop(0,'#fff7d6');g.addColorStop(0.35,'#ffd76a');g.addColorStop(1,'rgba(255,150,40,0)');
@@ -391,9 +452,8 @@ function draw(t){
   ctx.fillStyle='rgba(232,241,255,0.75)';ctx.font=(10*DPR)+'px sans-serif';ctx.fillText(p.n,x,y-pr-6*DPR/1.6);
   pos.push({x,y,r:Math.max(10,pr+6),p});
  });
- requestAnimationFrame(draw);
 }
-requestAnimationFrame(draw);
+animateOnScreen(cv,draw);
 cv.addEventListener('click',e=>{
  const r=cv.getBoundingClientRect(),mx=(e.clientX-r.left)*DPR,my=(e.clientY-r.top)*DPR;
  for(const o of pos){if(Math.hypot(o.x-mx,o.y-my)<o.r){
@@ -419,37 +479,45 @@ const DPR2=Math.min(2,window.devicePixelRatio||1);
 /* ---------- earth: rotating globe of GeoNames populated places ---------- */
 (function(){
 const cv=$2('earthCv'),ctx=cv.getContext('2d');let W,H,cx,cy,R;
-function resize(){W=cv.width=cv.offsetWidth*DPR2;H=cv.height=(cv.getAttribute('height')|0)*DPR2;cx=W/2;cy=H/2;R=Math.min(W,H)/2-14*DPR2;}
+function resize(){W=cv.width=Math.floor(cv.offsetWidth*DPR2);H=cv.height=(cv.getAttribute('height')|0)*DPR2;cx=W/2;cy=H/2;R=Math.max(10,Math.min(W,H)/2-14*DPR2);}
 resize();window.addEventListener('resize',resize);
-let ang=0,frame=0;
+let ang=0,frame=0,lastFrame=0,sourceCount=-1;
 const RAD=Math.PI/180;
-function draw(){
+function preparePlaces(){
+ if(sourceCount===C.length)return;
+ const start=Math.max(0,sourceCount);
+ for(let i=start;i<C.length;i++){
+  const c=C[i],lat=c[0]*RAD;
+  c[0]=lat;c[1]*=RAD;c[4]=Math.cos(lat);c[5]=Math.sin(lat);
+ }
+ sourceCount=C.length;
+}
+function draw(now){
+ if(!W||!H)return;
  ctx.clearRect(0,0,W,H);
- /* atmosphere */
  let g=ctx.createRadialGradient(cx,cy,R*0.9,cx,cy,R*1.25);
  g.addColorStop(0,'rgba(90,169,255,0)');g.addColorStop(1,'rgba(90,169,255,0.28)');
  ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R*1.25,0,7);ctx.fill();
- /* sphere */
  g=ctx.createRadialGradient(cx-R*0.4,cy-R*0.4,R*0.1,cx,cy,R);
  g.addColorStop(0,'#0e2038');g.addColorStop(1,'#050b18');
  ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.fill();
  ctx.strokeStyle='rgba(125,211,252,0.35)';ctx.lineWidth=1.5;ctx.stroke();
- ang+=0.0022;frame++;
- const n=C.length, stride=4, off=frame%stride;
- for(let i=off;i<n;i+=stride){
-  const c=C[i],la=c[0]*RAD,lo=c[1]*RAD+ang;
-  const X=Math.cos(la)*Math.sin(lo),Y=Math.sin(la),Z=Math.cos(la)*Math.cos(lo);
+ if(lastFrame)ang+=Math.min(50,now-lastFrame)*0.00012;
+ lastFrame=now;frame++;
+ const oldCount=sourceCount;preparePlaces();
+ for(let i=0;i<C.length;i++){
+  const c=C[i],lo=c[1]+ang,X=c[4]*Math.sin(lo),Y=c[5],Z=c[4]*Math.cos(lo);
   if(Z<=0.02)continue;
-  const sx=cx+R*X,sy=cy-R*Y,a=0.2+0.8*Z;
-  const pop=c[2],s=(pop>1000000?2.6:pop>100000?1.9:pop>10000?1.4:1)*DPR2/1.4;
+  const sx=cx+R*X,sy=cy-R*Y,a=0.2+0.8*Z,pop=c[2];
+  const s=(pop>1000000?2.6:pop>100000?1.9:pop>10000?1.4:1)*DPR2/1.4;
   ctx.fillStyle=pop>1000000?('rgba(240,171,252,'+a.toFixed(2)+')'):('rgba(125,211,252,'+a.toFixed(2)+')');
   ctx.fillRect(sx,sy,s,s);
  }
- if(frame%20===0)$2('cityCount').textContent='已载入 '+n.toLocaleString()+' 个居民点';
- requestAnimationFrame(draw);
+ if(frame%20===0||oldCount!==sourceCount)$2('cityCount').textContent='已载入 '+C.length.toLocaleString()+' 个居民点';
 }
-requestAnimationFrame(draw);
+animateOnScreen(cv,draw);
 })();
+
 </script>
 <script>
 "use strict";
@@ -458,64 +526,58 @@ const DPR3=Math.min(2,window.devicePixelRatio||1);
 /* ---------- mandelbrot ---------- */
 (function(){
 const cv=$2b('mandelCv'),ctx=cv.getContext('2d');
-let W,H;const home={x:-0.5,y:0,r:1.7};let view={...home},touring=false,tourT=null;
-function resize(){W=cv.width=Math.floor(cv.offsetWidth*DPR3);H=cv.height=(cv.getAttribute('height')|0)*DPR3;render();}
+let W=0,H=0,renderVersion=0;
+const home={x:-0.5,y:0,r:1.7};let view={...home},touring=false,tourT=null;
+function resize(){
+ const cssW=Math.max(1,cv.offsetWidth),cssH=Math.max(1,Number(cv.getAttribute('height'))||440);
+ const scale=Math.min(DPR3,Math.sqrt(400000/(cssW*cssH)));
+ W=cv.width=Math.max(1,Math.floor(cssW*scale));H=cv.height=Math.max(1,Math.floor(cssH*scale));
+ render();
+}
 function render(){
+ const version=++renderVersion,w=W,h=H,current={...view};
+ if(!w||!h)return;
  $2b('mandelInfo').textContent='渲染中…';
- setTimeout(()=>{
- const img=ctx.createImageData(W,H),d=img.data,maxI=140;
- for(let py=0;py<H;py++){
-  const ci=view.y+(py/H-0.5)*2*view.r;
-  for(let px=0;px<W;px++){
-   const cr=view.x+(px/W-0.5)*2*view.r*(W/H);
-   let zr=0,zi=0,it=0;
-   while(zr*zr+zi*zi<4&&it<maxI){const t=zr*zr-zi*zi+cr;zi=2*zr*zi+ci;zr=t;it++;}
-   const k=(py*W+px)*4;
-   if(it>=maxI){d[k]=d[k+1]=d[k+2]=4;}
-   else{const t=it/maxI;
-    d[k]=Math.floor(9*(1-t)*t*t*t*255);d[k+1]=Math.floor(15*(1-t)*(1-t)*t*t*255);d[k+2]=Math.floor(8.5*(1-t)*(1-t)*(1-t)*t*255);}
-   d[k+3]=255;
-  }}
- ctx.putImageData(img,0,0);
- $2b('mandelInfo').textContent='中心 '+view.x.toFixed(6)+' , '+view.y.toFixed(6)+'　放大 '+(home.r/view.r).toFixed(1)+'×';
- },30);
+ const img=ctx.createImageData(w,h),d=img.data,maxI=100;
+ let py=0;
+ function paintBatch(){
+  if(version!==renderVersion)return;
+  const end=Math.min(py+8,h);
+  for(let y=py;y<end;y++){
+   const ci=current.y+(y/h-0.5)*2*current.r;
+   for(let x=0;x<w;x++){
+    const cr=current.x+(x/w-0.5)*2*current.r*(w/h);
+    let zr=0,zi=0,it=0;
+    while(zr*zr+zi*zi<4&&it<maxI){const t=zr*zr-zi*zi+cr;zi=2*zr*zi+ci;zr=t;it++;}
+    const k=(y*w+x)*4;
+    if(it>=maxI){d[k]=d[k+1]=d[k+2]=4;}
+    else{const t=it/maxI;
+     d[k]=Math.floor(9*(1-t)*t*t*t*255);d[k+1]=Math.floor(15*(1-t)*(1-t)*t*t*255);d[k+2]=Math.floor(8.5*(1-t)*(1-t)*(1-t)*t*255);}
+    d[k+3]=255;
+   }
+  }
+  ctx.putImageData(img,0,0,0,py,w,end-py);
+  py=end;
+  if(py<h){requestAnimationFrame(paintBatch);return;}
+  $2b('mandelInfo').textContent='中心 '+current.x.toFixed(6)+' , '+current.y.toFixed(6)+'　放大 '+(home.r/current.r).toFixed(1)+'×';
+ }
+ requestAnimationFrame(paintBatch);
 }
 cv.addEventListener('click',e=>{
  const r=cv.getBoundingClientRect(),px=(e.clientX-r.left)/r.width,py=(e.clientY-r.top)/r.height;
  view.x+=(px-0.5)*2*view.r*(W/H);view.y+=(py-0.5)*2*view.r;view.r/=2.2;render();});
 cv.addEventListener('dblclick',()=>{view={...home};render();});
 $2b('mandelReset').onclick=()=>{stopTour();view={...home};render();};
-function stopTour(){touring=false;$2b('mandelTour').textContent='自动巡游';if(tourT)clearInterval(tourT);}
+function stopTour(){touring=false;$2b('mandelTour').textContent='自动巡游';if(tourT!==null){clearInterval(tourT);tourT=null;}}
 $2b('mandelTour').onclick=()=>{
  if(touring){stopTour();return;}
  touring=true;$2b('mandelTour').textContent='停止巡游';
  view={x:-0.745,y:0.113,r:1.2};render();
  tourT=setInterval(()=>{if(!touring)return;view.r*=0.82;if(view.r<1e-6){stopTour();view={...home};}render();},900);};
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopTour();});
 window.addEventListener('resize',resize);resize();
 })();
-/* ---------- pi walk ---------- */
-(function(){
-const cv=$2b('piCv'),ctx=cv.getContext('2d');
-const cols=['#f87171','#fb923c','#facc15','#4ade80','#2dd4bf','#60a5fa','#a78bfa','#f0abfc','#f472b6','#94a3b8'];
-function draw(){
- const W=cv.width=cv.offsetWidth*DPR3,H=cv.height=(cv.getAttribute('height')|0)*DPR3;
- ctx.clearRect(0,0,W,H);
- const N=Math.min(PI.length,60000);
- let x=W/2,y=H/2;ctx.lineWidth=Math.max(1,DPR3/1.5);
- for(let i=0;i<N;i++){
-  const dg=PI.charCodeAt(i)-48;if(dg<0||dg>9)continue;
-  const a=dg*Math.PI/5,st=2.6*DPR3/1.5;
-  const nx=x+Math.cos(a)*st,ny=y+Math.sin(a)*st;
-  ctx.strokeStyle=cols[dg];ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(nx,ny);ctx.stroke();
-  x=nx;y=ny;
-  if(x<0||x>W||y<0||y>H){x=W/2;y=H/2;}
- }
- $2b('piText').textContent=PI.slice(0,120);
-}
-let tries=0;
-const t=setInterval(()=>{if(PI.length>1000||++tries>200){clearInterval(t);draw();}},300);
-window.addEventListener('resize',()=>draw());
-})();
+
 </script>
 """
 
@@ -523,6 +585,27 @@ JS_APP_3 = r"""
 <script>
 "use strict";
 const $3=id=>document.getElementById(id);
+/* ---------- pi walk ---------- */
+(function(){
+const cv=$3('piCv'),ctx=cv.getContext('2d');
+const cols=['#f87171','#fb923c','#facc15','#4ade80','#2dd4bf','#60a5fa','#a78bfa','#f0abfc','#f472b6','#94a3b8'];
+function draw(){
+ const W=cv.width=cv.offsetWidth*DPR,H=cv.height=(cv.getAttribute('height')|0)*DPR;
+ ctx.clearRect(0,0,W,H);
+ const N=Math.min(PI.length,60000);
+ let x=W/2,y=H/2;ctx.lineWidth=Math.max(1,DPR/1.5);
+ for(let i=0;i<N;i++){
+  const dg=PI.charCodeAt(i)-48;if(dg<0||dg>9)continue;
+  const a=dg*Math.PI/5,st=2.6*DPR/1.5;
+  const nx=x+Math.cos(a)*st,ny=y+Math.sin(a)*st;
+  ctx.strokeStyle=cols[dg];ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(nx,ny);ctx.stroke();
+  x=nx;y=ny;
+  if(x<0||x>W||y<0||y>H){x=W/2;y=H/2;}
+ }
+ $3('piText').textContent=PI.slice(0,120);
+}
+window.addEventListener('resize',draw);draw();
+})();
 /* ---------- hanzi sea ---------- */
 (function(){
 const PER=600;let page=0,flt='';
@@ -550,7 +633,7 @@ function render(){
 $3('hzSearch').addEventListener('input',e=>{flt=e.target.value.trim();page=0;render();});
 $3('hzPrev').onclick=()=>{if(page>0){page--;render();}};
 $3('hzNext').onclick=()=>{page++;render();};
-let tries=0;const t=setInterval(()=>{if(H.length>0||++tries>300){clearInterval(t);render();}},300);
+render();
 })();
 /* ---------- music: code-composed 《星海》 ---------- */
 const SONG_META={title:'星海',scale:'D宫五声音阶',bpm:92};
@@ -577,10 +660,11 @@ function tone(f,t,dur){
 }
 function drawVis(an){
  const cv=$3('musicCv'),ctx=cv.getContext('2d');
- const W=cv.width=cv.offsetWidth*DPR,H=cv.height=(cv.getAttribute('height')|0)*DPR;
- const data=new Uint8Array(an.frequencyBinCount);
- (function tick(){
-  requestAnimationFrame(tick);
+ let W=0,H=0,raf=0;const data=new Uint8Array(an.frequencyBinCount);
+ function resize(){W=cv.width=Math.floor(cv.offsetWidth*DPR);H=cv.height=(cv.getAttribute('height')|0)*DPR;}
+ function tick(){
+  raf=0;
+  if(!playing||document.hidden)return;
   an.getByteFrequencyData(data);
   ctx.clearRect(0,0,W,H);
   const n=64,bw=W/n;
@@ -588,22 +672,30 @@ function drawVis(an){
    const h=Math.max(2,v*H*0.92);
    const gr=ctx.createLinearGradient(0,H,0,H-h);gr.addColorStop(0,'#38bdf8');gr.addColorStop(1,'#f0abfc');
    ctx.fillStyle=gr;ctx.fillRect(i*bw+1,H-h,bw-2,h);}
- })();
+  raf=requestAnimationFrame(tick);
+ }
+ resize();window.addEventListener('resize',resize);
+ return function(active){
+  if(active&&!document.hidden&&!raf)raf=requestAnimationFrame(tick);
+  else if(!active&&raf){cancelAnimationFrame(raf);raf=0;}
+ };
 }
-let visStarted=false;
+let visControl=null;
+document.addEventListener('visibilitychange',()=>{if(visControl)visControl(playing);});
 $3('playBtn').onclick=()=>{
  const ac=ensure();ac.resume();
- if(playing){timers.forEach(clearTimeout);timers=[];playing=false;$3('playBtn').textContent='▶ 播放《星海》';$3('nowPlaying').textContent='已停止';return;}
+ if(playing){timers.forEach(clearTimeout);timers=[];playing=false;if(visControl)visControl(false);$3('playBtn').textContent='▶ 播放《星海》';$3('nowPlaying').textContent='已停止';return;}
  if(!actx._an){actx._an=ac.createAnalyser();actx._an.fftSize=256;actx._an.connect(ac.destination);}
- if(!visStarted){visStarted=true;drawVis(actx._an);}
- playing=true;$3('playBtn').textContent='⏸ 停止';
- const beat=60/SONG_META.bpm;let t=ac.currentTime+0.1,total=0;
+ if(!visControl)visControl=drawVis(actx._an);
+ playing=true;visControl(true);$3('playBtn').textContent='⏸ 停止';
+ const beat=60/SONG_META.bpm;let t=ac.currentTime+0.1;
  SONG.forEach((nd,i)=>{
   const f=noteHz(nd[0]),dur=nd[1]*beat;
-  tone(f,t,dur*1.8);total=t-ac.currentTime;
+  tone(f,t,dur*1.8);
   timers.push(setTimeout(()=>{$3('nowPlaying').textContent='♪ '+nd[0]+'  ('+(i+1)+'/'+SONG.length+')';},(t-ac.currentTime)*1000));
   t+=dur;});
- timers.push(setTimeout(()=>{playing=false;$3('playBtn').textContent='▶ 播放《星海》';$3('nowPlaying').textContent='演奏完毕 · 全曲 '+total.toFixed(1)+' 秒';},(t-ac.currentTime)*1000+300));
+ const total=t-ac.currentTime;
+ timers.push(setTimeout(()=>{playing=false;if(visControl)visControl(false);$3('playBtn').textContent='▶ 播放《星海》';$3('nowPlaying').textContent='演奏完毕 · 全曲 '+total.toFixed(1)+' 秒';timers=[];},(t-ac.currentTime)*1000+300));
 };
 })();
 /* ---------- world clocks ---------- */
@@ -613,13 +705,19 @@ const grid=$3('clockGrid');const cells=ZONES.map(z=>{
  const d=document.createElement('div');d.className='clock';
  d.innerHTML='<div class="t">--:--:--</div><div class="c">'+z[0]+'</div><div class="z">'+z[1]+'</div>';
  grid.appendChild(d);return d;});
+const formatters=ZONES.map(z=>{
+ try{return new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZone:z[1]});}
+ catch(e){return null;}
+});
 function tick(){
  const now=new Date();
- ZONES.forEach((z,i)=>{
-  try{cells[i].querySelector('.t').textContent=new Intl.DateTimeFormat('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZone:z[1]}).format(now);}
-  catch(e){cells[i].querySelector('.t').textContent='N/A';}});
+ cells.forEach((cell,i)=>{const formatter=formatters[i];cell.querySelector('.t').textContent=formatter?formatter.format(now):'N/A';});
 }
-tick();setInterval(tick,1000);
+tick();let timer=setInterval(tick,1000);
+document.addEventListener('visibilitychange',()=>{
+ if(document.hidden){clearInterval(timer);timer=null;}
+ else if(timer===null){tick();timer=setInterval(tick,1000);}
+});
 })();
 /* ---------- header chips + footer stats (filled by generator) ---------- */
 (function(){
@@ -628,6 +726,7 @@ $3('chips').innerHTML=chips.map(c=>'<span class="chip">'+c[0]+' '+c[1]+'</span>'
 $3('footStats').innerHTML='<span class="stat">总字节 <b>'+STATS.bytes+'</b></span><span class="stat">分片 <b>'+STATS.chunks+'</b></span><span class="stat">居民点 <b>'+STATS.cities+'</b></span><span class="stat">汉字 <b>'+STATS.hanzi+'</b></span><span class="stat">恒星 <b>'+STATS.stars+'</b></span>';
 $3('footBytes').textContent=STATS.bytes;$3('footChunks').textContent=STATS.chunks;
 })();
+window.dispatchEvent(new Event("biggest:data-ready"));
 </script>
 </body>
 </html>
@@ -649,6 +748,12 @@ def main():
     ap.add_argument("--worker-src", required=True,
                     help="worker/src dir; chunks.js manifest is written here")
     args = ap.parse_args()
+    if args.chunk_mib < 1:
+        ap.error("--chunk-mib must be at least 1")
+    if args.max_cities < 0:
+        ap.error("--max-cities must be 0 (unlimited) or a positive integer")
+    if args.pi_digits < 0:
+        ap.error("--pi-digits must be non-negative")
 
     d = args.data
     print("[1/6] loading cities...", flush=True)
@@ -699,18 +804,28 @@ def main():
     w.write(JS_APP_3)
     total, files = w.close()
 
-    # patch STATS placeholder in first chunk
-    stats = {"bytes": fmt_int(total) + " 字节", "chunks": fmt_int(len(files)),
-             "cities": fmt_int(len(cities)), "hanzi": fmt_int(len(hanzi)),
-             "stars": fmt_int(len(stars)), "pi": fmt_int(len(pi))}
+    # Patch the stats placeholder and converge on the actual final output size.
     p0 = os.path.join(args.out, files[0])
     with open(p0, encoding="utf-8") as f:
-        c0 = f.read()
-    assert "/*__STATS__*/null" in c0
-    c0 = c0.replace("/*__STATS__*/null", json.dumps(stats, ensure_ascii=False))
-    with open(p0, "w", encoding="utf-8") as f:
-        f.write(c0)
-    total = sum(os.path.getsize(os.path.join(args.out, x)) for x in files)
+        template = f.read()
+    placeholder = "/*__STATS__*/null"
+    if placeholder not in template:
+        raise RuntimeError("stats placeholder missing from first chunk")
+    stats = {"bytes": "", "chunks": fmt_int(len(files)),
+             "cities": fmt_int(len(cities)), "hanzi": fmt_int(len(hanzi)),
+             "stars": fmt_int(len(stars)), "pi": fmt_int(len(pi))}
+    for _ in range(10):
+        stats["bytes"] = fmt_int(total) + " 字节"
+        c0 = template.replace(placeholder, json.dumps(stats, ensure_ascii=False))
+        with open(p0, "w", encoding="utf-8") as f:
+            f.write(c0)
+        actual_total = sum(os.path.getsize(os.path.join(args.out, x)) for x in files)
+        if stats["bytes"] == fmt_int(actual_total) + " 字节":
+            total = actual_total
+            break
+        total = actual_total
+    else:
+        raise RuntimeError("could not converge on the final byte count")
 
     print("[6/6] writing worker manifest...", flush=True)
     os.makedirs(args.worker_src, exist_ok=True)

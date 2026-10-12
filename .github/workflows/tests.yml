@@ -1,0 +1,28 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run generator tests
+        run: python -m unittest discover -s tests -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Prepare a tiny Worker asset fixture
+        run: |
+          mkdir -p worker/chunks
+          printf 'export const CHUNKS = ["chunk-00000.html"];\n' > worker/src/chunks.js
+          printf '<!doctype html>\n' > worker/chunks/chunk-00000.html
+      - name: Install Wrangler
+        run: npm ci --prefix worker
+      - name: Validate Worker bundle
+        run: cd worker && npx wrangler deploy --dry-run
