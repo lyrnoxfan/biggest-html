@@ -27,4 +27,4 @@ python3 -m unittest discover -s tests -v
 cd worker && wrangler deploy
 ```
 
-线上域名：`https://biggest.lyrnox.com`（Worker Route，需 DNS CNAME 指向 workers.dev）。
+线上域名：`https://your-domain.example.com`（Worker Route，需 DNS CNAME 指向 workers.dev）。
