@@ -1,6 +1,9 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
+
+from gen.build import city_js_batch, load_cities
 
 from gen.build import ChunkWriter, js_str
 
@@ -33,6 +36,49 @@ class ChunkWriterTests(unittest.TestCase):
         encoded = js_str("</script>")
         self.assertNotIn("</script>", encoded)
         self.assertIn("<" + chr(92) + "/script>", encoded)
+
+
+class CitySelectionTests(unittest.TestCase):
+    @staticmethod
+    def geonames_row(name, feature, lat, lon, population):
+        fields = [""] * 19
+        fields[1] = name
+        fields[4] = str(lat)
+        fields[5] = str(lon)
+        fields[7] = feature
+        fields[14] = str(population)
+        return "\t".join(fields) + "\n"
+
+    def test_city_batch_uses_escaped_json_payload(self):
+        rows = [(1.23456, -2.34567, 123, 'quoted "</script>\\name')]
+        source = city_js_batch(rows)
+        self.assertNotIn("</script>", source)
+        payload = source.removeprefix("C.push(...JSON.parse(").removesuffix("));\n")
+        decoded = json.loads(json.loads(payload))
+        self.assertEqual(decoded, [[1.2346, -2.3457, 123, 'quoted "</script>\\name']])
+
+    def test_bounded_selection_matches_stable_population_sort(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "allCountries.txt"
+            source.write_text("".join([
+                self.geonames_row("A", "PPL", 1, 2, 30),
+                self.geonames_row("not a place", "ADM1", 0, 0, 1000),
+                self.geonames_row("B", "PPLA", 3, 4, 30),
+                self.geonames_row("C", "PPLC", 5, 6, 50),
+                self.geonames_row("D", "PPL", 7, 8, 20),
+            ]), encoding="utf-8")
+
+            self.assertEqual(load_cities(source, 3), [
+                (5.0, 6.0, 50, "C"),
+                (1.0, 2.0, 30, "A"),
+                (3.0, 4.0, 30, "B"),
+            ])
+            self.assertEqual(load_cities(source, 0), [
+                (5.0, 6.0, 50, "C"),
+                (1.0, 2.0, 30, "A"),
+                (3.0, 4.0, 30, "B"),
+                (7.0, 8.0, 20, "D"),
+            ])
 
 
 if __name__ == "__main__":
