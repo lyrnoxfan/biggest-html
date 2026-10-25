@@ -20,9 +20,41 @@ jobs:
       - name: Prepare a tiny Worker asset fixture
         run: |
           mkdir -p worker/chunks
-          printf 'export const CHUNKS = ["chunk-00000.html"];\n' > worker/src/chunks.js
+          printf 'export const CHUNKS = ["chunk-00000.html"];\nexport const TOTAL_BYTES = 16;\n' > worker/src/chunks.js
           printf '<!doctype html>\n' > worker/chunks/chunk-00000.html
       - name: Install Wrangler
         run: npm ci --prefix worker
       - name: Validate Worker bundle
         run: cd worker && npx wrangler deploy --dry-run
+
+  folded-atlas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build self-contained editions
+        run: |
+          python gen/atlas.py
+          python gen/atlas.py --count 262144 --html artifacts/folded-atlas-large.html
+          python gen/atlas.py --count 2097152 --html artifacts/folded-atlas-expedition.html
+      - name: Install browser test tools (not shipped in HTML)
+        run: |
+          pip install playwright==1.58.0
+          python -m playwright install --with-deps chromium firefox
+          curl --fail --location --retry 2 https://cdn.jsdelivr.net/npm/axe-core@4.11.0/axe.min.js -o artifacts/axe.min.js
+      - name: Offline Chromium and Firefox, mobile and desktop
+        run: |
+          python tests/browser_atlas.py
+          ATLAS_HTML=artifacts/folded-atlas-large.html python tests/browser_atlas.py
+          python tests/scale_atlas.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: folded-atlas-html-and-evidence
+          path: |
+            artifacts/folded-atlas*.html
+            artifacts/*-results.json
+            artifacts/*.png

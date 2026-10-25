@@ -1,0 +1,146 @@
+[
+  {
+    "browser": "chromium",
+    "version": "145.0.7632.6",
+    "width": 1440,
+    "cpuThrottle": 1,
+    "fileBytes": 242968030,
+    "loadToReadySeconds": 2.548,
+    "lastRecordUIJumpSeconds": 0.106,
+    "initial": {
+      "count": 2097152,
+      "dom": 8470,
+      "blocks": 8192,
+      "cache": 1,
+      "cards": 24,
+      "canvas": [
+        360,
+        153
+      ],
+      "navigation": [
+        {
+          "domContentLoaded": 2435.9000000000233,
+          "load": 2501.100000000035
+        }
+      ],
+      "overflow": false
+    },
+    "after150pages": {
+      "cache": 4,
+      "cards": 24,
+      "dom": 8470
+    },
+    "peakProcessTreeRSSBytes": 1468981248,
+    "rssCaveat": "Linux test driver + browser process-tree RSS sum sampled at 200ms; shared pages counted repeatedly, not exclusive memory or minimum device RAM. Source text still resident.",
+    "errors": [],
+    "externalRequests": []
+  },
+  {
+    "browser": "chromium",
+    "version": "145.0.7632.6",
+    "width": 360,
+    "cpuThrottle": 4,
+    "fileBytes": 242968030,
+    "loadToReadySeconds": 12.882,
+    "lastRecordUIJumpSeconds": 0.244,
+    "initial": {
+      "count": 2097152,
+      "dom": 8470,
+      "blocks": 8192,
+      "cache": 1,
+      "cards": 24,
+      "canvas": [
+        322,
+        330
+      ],
+      "navigation": [
+        {
+          "domContentLoaded": 12510.399999999965,
+          "load": 12818.399999999965
+        }
+      ],
+      "overflow": false
+    },
+    "after150pages": {
+      "cache": 4,
+      "cards": 24,
+      "dom": 8470
+    },
+    "peakProcessTreeRSSBytes": 1579200512,
+    "rssCaveat": "Linux test driver + browser process-tree RSS sum sampled at 200ms; shared pages counted repeatedly, not exclusive memory or minimum device RAM. Source text still resident.",
+    "errors": [],
+    "externalRequests": []
+  },
+  {
+    "browser": "firefox",
+    "version": "146.0.1",
+    "width": 1440,
+    "cpuThrottle": 1,
+    "fileBytes": 242968030,
+    "loadToReadySeconds": 1.699,
+    "lastRecordUIJumpSeconds": 0.23,
+    "initial": {
+      "count": 2097152,
+      "dom": 8470,
+      "blocks": 8192,
+      "cache": 1,
+      "cards": 24,
+      "canvas": [
+        720,
+        305
+      ],
+      "navigation": [
+        {
+          "domContentLoaded": 1635,
+          "load": 1635
+        }
+      ],
+      "overflow": false
+    },
+    "after150pages": {
+      "cache": 4,
+      "cards": 24,
+      "dom": 8470
+    },
+    "peakProcessTreeRSSBytes": 1553661952,
+    "rssCaveat": "Linux test driver + browser process-tree RSS sum sampled at 200ms; shared pages counted repeatedly, not exclusive memory or minimum device RAM. Source text still resident.",
+    "errors": [],
+    "externalRequests": []
+  },
+  {
+    "browser": "firefox",
+    "version": "146.0.1",
+    "width": 360,
+    "cpuThrottle": 1,
+    "fileBytes": 242968030,
+    "loadToReadySeconds": 1.495,
+    "lastRecordUIJumpSeconds": 0.204,
+    "initial": {
+      "count": 2097152,
+      "dom": 8470,
+      "blocks": 8192,
+      "cache": 1,
+      "cards": 24,
+      "canvas": [
+        322,
+        330
+      ],
+      "navigation": [
+        {
+          "domContentLoaded": 1439,
+          "load": 1440
+        }
+      ],
+      "overflow": false
+    },
+    "after150pages": {
+      "cache": 4,
+      "cards": 24,
+      "dom": 8470
+    },
+    "peakProcessTreeRSSBytes": 1486135296,
+    "rssCaveat": "Linux test driver + browser process-tree RSS sum sampled at 200ms; shared pages counted repeatedly, not exclusive memory or minimum device RAM. Source text still resident.",
+    "errors": [],
+    "externalRequests": []
+  }
+]

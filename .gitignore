@@ -5,3 +5,8 @@ worker/.wrangler/
 data/
 __pycache__/
 *.pyc
+
+artifacts/
+node_modules/
+
+.venv/
