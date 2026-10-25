@@ -37,7 +37,7 @@ class AtlasTests(unittest.TestCase):
             self.assertTrue(all((p/'chunks'/f).stat().st_size <= 1048576 for f in files))
 
     def test_invalid_sizes_and_half_worker_config_are_rejected(self):
-        for n in (0, 255, 257, 262400, 1048576):
+        for n in (0, 255, 257, 2097408, 4194304):
             with self.assertRaises(ValueError):
                 build(n, 'must-not-write.html')
         with self.assertRaises(ValueError):

@@ -29,8 +29,8 @@ def record(i):
             200 + ((s >> 10) % 3800), monthly]
 
 def build(count, html_path, out=None, worker_src=None, chunk_mib=20):
-    if count < 256 or count > 262144 or count % 256:
-        raise ValueError('count must be a multiple of 256, between 256 and 262144')
+    if count < 256 or count > 2097152 or count % 256:
+        raise ValueError('count must be a multiple of 256, between 256 and 2097152')
     if chunk_mib < 1 or chunk_mib > 24:
         raise ValueError('chunk-mib must be between 1 and 24')
     if bool(out) != bool(worker_src):
