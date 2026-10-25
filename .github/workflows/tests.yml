@@ -20,7 +20,7 @@ jobs:
       - name: Prepare a tiny Worker asset fixture
         run: |
           mkdir -p worker/chunks
-          printf 'export const CHUNKS = ["chunk-00000.html"];\n' > worker/src/chunks.js
+          printf 'export const CHUNKS = ["chunk-00000.html"];\nexport const TOTAL_BYTES = 16;\n' > worker/src/chunks.js
           printf '<!doctype html>\n' > worker/chunks/chunk-00000.html
       - name: Install Wrangler
         run: npm ci --prefix worker
