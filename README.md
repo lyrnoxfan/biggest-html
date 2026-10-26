@@ -29,17 +29,18 @@ python tests/verify_echo.py artifacts/echo-studio.html
 
 ### 实测范围与取舍
 
-以下是在 Linux 上以本地 `file://`、断网浏览器所做的实际测试，不是用户手机的实测。Chromium 360×800 使用 4 倍 CPU 节流；1440×900 为 1 倍。Firefox 没有 CPU 节流。加载时间包括 HTML 解析与首绘；进程树 RSS 是 Playwright 驱动的各浏览器后代进程 RSS 总和（不含驱动本身），共享页可能重复计算，不能当作设备最低内存要求。
+以下是在 Linux 上以本地 `file://`、断网浏览器所做的实际测试，不是用户手机的实测。Chromium 360×800 使用 4 倍 CPU 节流；1440×900 为 1 倍。Firefox 没有 CPU 节流。加载时间测至浏览器 load 事件、再核验界面就绪；首次声音计时包含点击前的浏览器滚动定位及解码，不等于声卡延迟。进程树 RSS 是 Playwright 驱动的各浏览器后代进程 RSS 总和（不含驱动本身），共享页可能重复计算，不能当作设备最低内存要求。
 
-| 文件 | 浏览器 / 视口 | 加载 | 首次开始播放 | 进程树 RSS 峰值 |
+| 文件 | 浏览器 / 视口 | 加载 | 点击至检测到非零声音 | 进程树 RSS 峰值 |
 |---|---|---:|---:|---:|
-| 26.1 MiB sketch | Chromium / 360，4× | 1.11 s | 0.27 s | 540 MB |
-| 26.1 MiB sketch | Firefox / 360 | 0.31 s | 0.41 s | 795 MB |
-| 277.1 MiB studio | Chromium / 360，4× | 7.12 s | 0.40 s | 994 MB |
-| 277.1 MiB studio | Firefox / 360 | 1.45 s | 1.56 s | 1,154 MB |
-| 622.9 MiB 压力版 | Chromium / 360，4× | 15.64 s | 0.41 s | 1,745 MB |
+| 26.1 MiB sketch | Chromium / 360，4× | 1.02 s | 2.26 s | 550 MB |
+| 26.1 MiB sketch | Firefox / 360 | 0.35 s | 0.74 s | 787 MB |
+| 277.1 MiB studio | Chromium / 360，4× | 6.74 s | 2.26 s | 999 MB |
+| 277.1 MiB studio | Firefox / 360 | 1.45 s | 1.77 s | 1,172 MB |
+| 622.9 MiB 压力版 | Chromium / 360，4× | 14.77 s | 2.29 s | 1,746 MB |
+| 622.9 MiB 压力版 | Firefox / 360 | 2.82 s | 2.34 s | 1,541 MB |
 
-最后一档只作为边界实验，不作为推荐交付；其文件超过 600 MiB、移动视口需约 16 秒才完成加载。推荐从 26.1 MiB 版开始。277.1 MiB 版在模拟器中可用，但解析耗时和内存占用明显更高；未在 Android/iOS 真机、Safari 或旧 WebView 验收，不能据桌面浏览器推断这些环境一定能打开。
+最后一档只作为边界实验，不作为推荐交付；其文件超过 600 MiB、移动视口需约 15 秒才完成加载。推荐从 26.1 MiB 版开始。277.1 MiB 版在受测桌面浏览器的移动视口中可用，但解析耗时和内存占用明显更高；未在 Android/iOS 真机、Safari 或旧 WebView 验收，不能据桌面浏览器推断这些环境一定能打开。
 
 测试覆盖 Chromium/Firefox 的 360px 与 1440px 视口、作品切换、逐小节播放、暂停/停止、键盘与屏幕钢琴、八轨编辑/力度/静音/速度/循环、撤销、保存、有效与无效工程导入、WAV 导出、窄屏与大字布局、页面异常和外部请求。六首示例均可选择并播放。实际导出的 WAV 为双声道 44.1kHz、非静音信号；峰值低于满刻度，避免削波。axe 自动扫描在受测页面未发现 WCAG 2.1 A/AA 违规；自动扫描不能替代辅助技术实测。
 
@@ -52,6 +53,7 @@ python tests/verify_echo.py artifacts/echo-studio.html
 # 全浏览器尺寸矩阵（需安装 Playwright 与浏览器；Linux 无声服务器还需 PulseAudio 音频输出端）
 ECHO_HTML=artifacts/echo-sketch.html .venv/bin/python tests/browser_echo.py
 ECHO_HTML=artifacts/echo-studio.html .venv/bin/python tests/browser_echo.py
+.venv/bin/python tests/recovery_echo.py
 ```
 
 要复现较大的边界实验（非推荐手机版本）：

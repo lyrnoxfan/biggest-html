@@ -96,6 +96,7 @@ jobs:
           ECHO_HTML=artifacts/echo-sketch.html python tests/browser_echo.py
           ECHO_HTML=artifacts/echo-studio.html python tests/browser_echo.py
           python tests/scale_echo.py
+          python tests/recovery_echo.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
