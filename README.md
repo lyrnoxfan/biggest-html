@@ -1,40 +1,59 @@
-# biggest-html · 世界最最最大的 HTML
+# biggest-html · 单文件作品实验
 
-这个仓库把真实数据与代码绘图装进一个自包含页面：太阳系、地球居民点、分形与圆周率、汉字、合成音乐和世界时钟。生成器取用 GeoNames、HYG、Unicode Unihan 与原作的 NASA 行星参数；页面不靠复制图像、重复段落或空白填充增加体积。
+## 回声工坊
 
-## 生成建议版本
+把一段音乐变成自己的：先听六首原创的八小节小曲，再在八轨节奏格里删音、改音或直接弹奏。音色由生成器合成后嵌进单个 HTML；作品不加载图片、外部字体、音频服务或其他网络资源，下载后可直接打开。
 
-默认纳入按人口排序的 1,000,000 条 GeoNames 居民点记录。本次完整生成的单页 HTML 为 **38,447,020 字节（约 36.7 MiB）**，构建器默认上限也是 1,000,000 条。该规模在下文所列 Chromium 环境中完成实际打开与交互检查；这不是所有设备的兼容保证。
+每首小曲都用不同的速度、调性、织体和留白方式写成，不是同一段旋律换名。毡音钢琴、木片琴、玻璃钟、拨弦、圆低音和风琴各有音色，另有底鼓、沙鼓与细镲。可逐小节聆听、调节速度、静音和音轨音量；键盘或触屏演奏；撤销、恢复、保存到本机、导入/导出工程，并导出 44.1kHz 立体声 WAV。
 
-```bash
-uv run --no-project --with mpmath==1.3.0 python gen/build.py \
-  --data /path/to/data --out /tmp/big-html/chunks \
-  --worker-src /tmp/big-html/worker --max-cities 1000000 \
-  --pi-digits 100000 --chunk-mib 20
-cat /tmp/big-html/chunks/chunk-*.html > biggest.html
-```
+### 作品文件
 
-原始数据不包含在 Git 中。`--max-cities N` 选取人口最大的 N 条 PPL 居民点记录；默认 N 为 1,000,000，生成器读取源文件时用有界堆保留结果，避免先把 500 多万条记录全部载入内存。将 N 设为 `0` 会纳入全部源记录，输出会显著增大，需另行测试目标设备。构建分片仅供生成和 Worker 传输；按清单顺序拼接后才是可直接打开的单个 HTML。
+- 推荐手机先试 `echo-sketch.html`：约 26.1 MiB，219 个独立的可演奏 WAV 样本，24kHz 单声道，覆盖 C2–B4。较小的采样库让首次解析更快。
+- 较完整的 `echo-studio.html`：约 277.1 MiB，582 个独立 WAV 样本，48kHz 立体声，含两个力度层，覆盖 C2–B5。它是本次已实测的较大版本，不代表所有设备都能顺畅打开。
 
-## 实测规模与体验
+两版都可直接打开；文件本身不需要安装。若浏览器没有 Web Audio，仍可查看和编辑乐谱、保存工程，但无法发声。播放由明确的点击/触键启动；页面进入后台时会停止声音。主音量有余量并经过压缩器限制峰值。每个样本均按音高、音色、力度与声道独立合成；构建器会检查样本不重复，避免附加静音或复制内容来增加大小。
 
-本次使用 GeoNames `allCountries.txt`、HYG v3、Unicode Unihan 17.0 和 100,000 位 π，生成 1,000,000 条居民点记录、8,878 条恒星记录、44,350 条汉字记录以及 100,000 位 π 小数。居民点数组中有 999,995 条不同字段组合、993,559 个不同坐标；其余是源数据中字段完全相同或坐标重合的记录，并未复制填充。地图动画最多绘制 120,000 个居民点，其余记录仍完整载入页面；以有限采样避免每帧重绘百万个点。图上的每个点对应真实坐标，人口规模决定点大小。
+### 本机生成
 
-验收为 Linux 上的 Chromium 文件页面：离线网络条件下，360×800 视口以 4 倍 CPU 节流新开页面，完整加载 6.568 秒；1440×900 新开页面加载 2.109 秒。两次均载入 1,000,000 条居民点、8,878 条恒星、44,350 条汉字和 100,000 位 π；共有 876 个 DOM 节点、6 个 Canvas，汉字“龙”搜索和详情卡可用，地球画布有绘制像素，控制台/页面错误及外部请求均为 0。360 视口最长观察到的长任务为 252ms。浏览器自动化结果和截图来自本次 Linux Chromium 验收；CI 单独运行仓库生成器单测及 Worker dry-run。该环境不是 Android/iOS 真机；Safari、旧版 WebView、低内存设备没有测试，不能据此保证它们能打开 36.7 MiB 文件。
-
-## 数据来源与许可
-
-- 居民点：GeoNames `allCountries.txt` 的 PPL 记录，页面提供 GeoNames 来源及 CC BY 4.0 许可链接。
-- 恒星：Astronexus HYG Database v3，页面提供来源与 CC BY-SA 4.0 许可链接；输出对记录作筛选和格式转换。
-- 汉字字段：Unicode Unihan 的 `kMandarin`、`kRSUnicode`。单页内附 Unicode License V3 的版权、许可和免责声明；完整文本见 [Unicode License V3](https://www.unicode.org/license.txt)。
-- 行星参数沿用原作品的 NASA 数据说明；生成页面保留其来源说明。
-
-## 仓库结构与测试
-
-- `gen/build.py` 生成 HTML 分片及 Worker 清单；原始数据需自行准备。
-- `worker/` 是仓库原有 Cloudflare Worker；分片产物不提交。
-- `tests/` 覆盖生成器基础行为、分片完整性和有界人口筛选。
+生成需要 Python 3、NumPy 2.4.2；生成完成的 HTML 无这些运行时依赖。
 
 ```bash
-python3 -m unittest discover -s tests -v
+python -m pip install numpy==2.4.2
+python gen/echo.py --out artifacts/echo-sketch.html --low 36 --high 71 --layers 1 --rate 24000 --mono
+python gen/echo.py --out artifacts/echo-studio.html --low 36 --high 83 --layers 2 --rate 48000
+python tests/verify_echo.py artifacts/echo-sketch.html
+python tests/verify_echo.py artifacts/echo-studio.html
 ```
+
+构建会同时生成 `.manifest.json`，记录配置、样本数、原始 WAV 字节数和各样本 SHA-256。独立验证器逐个解码嵌入样本、核对 WAV 格式、摘要和构建体积。`artifacts/` 下的 HTML 与证据不提交到 Git；CI 会上传可下载的文件。
+
+### 实测范围与取舍
+
+以下是在 Linux 上以本地 `file://`、断网浏览器所做的实际测试，不是用户手机的实测。Chromium 360×800 使用 4 倍 CPU 节流；1440×900 为 1 倍。Firefox 没有 CPU 节流。加载时间包括 HTML 解析与首绘；进程树 RSS 是测试驱动与浏览器子进程的 RSS 总和，共享页可能重复计算，不能当作设备最低内存要求。
+
+| 文件 | 浏览器 / 视口 | 加载 | 首次开始播放 | 进程树 RSS 峰值 |
+|---|---|---:|---:|---:|
+| 26.1 MiB sketch | Chromium / 360，4× | 1.11 s | 0.27 s | 540 MB |
+| 26.1 MiB sketch | Firefox / 360 | 0.31 s | 0.41 s | 795 MB |
+| 277.1 MiB studio | Chromium / 360，4× | 7.12 s | 0.40 s | 994 MB |
+| 277.1 MiB studio | Firefox / 360 | 1.45 s | 1.56 s | 1,154 MB |
+| 622.9 MiB 压力版 | Chromium / 360，4× | 15.64 s | 0.41 s | 1,745 MB |
+
+最后一档只作为边界实验，不作为推荐交付；其文件超过 600 MiB、移动视口需约 16 秒才完成加载。推荐从 26.1 MiB 版开始。277.1 MiB 版在模拟器中可用，但解析耗时和内存占用明显更高；未在 Android/iOS 真机、Safari 或旧 WebView 验收，不能据桌面浏览器推断这些环境一定能打开。
+
+测试覆盖 Chromium/Firefox 的 360px 与 1440px 视口、作品切换、逐小节播放、暂停/停止、键盘与屏幕钢琴、八轨编辑/力度/静音/速度/循环、撤销、保存、有效与无效工程导入、WAV 导出、窄屏与大字布局、页面异常和外部请求。六首示例均可选择并播放。实际导出的 WAV 为双声道 44.1kHz、非静音信号；峰值低于满刻度，避免削波。axe 自动扫描在受测页面未发现 WCAG 2.1 A/AA 违规；自动扫描不能替代辅助技术实测。
+
+证据保存在 `artifacts/echo-sketch-browser.json`、`artifacts/echo-studio-browser.json`、`artifacts/echo-scale-results.json` 及手机/桌面截图中。完整验收步骤：
+
+```bash
+python -m unittest discover -s tests -v
+python tests/verify_echo.py artifacts/echo-sketch.html
+python tests/verify_echo.py artifacts/echo-studio.html
+# 全浏览器尺寸矩阵（需安装 Playwright 与浏览器）
+ECHO_HTML=artifacts/echo-sketch.html .venv/bin/python tests/browser_echo.py
+ECHO_HTML=artifacts/echo-studio.html .venv/bin/python tests/browser_echo.py
+```
+
+### 来源与许可
+
+作品的六首示例乐曲、矢量插图和音色合成均为本项目原创；没有从录音或第三方数据集复制内容。代码和随构建输出的原创样本按 `gen/ECHO-LICENSE.txt` 中的 MIT 条款提供。原仓库的知识展览与 Worker 代码、数据及其许可不因本作品改变。

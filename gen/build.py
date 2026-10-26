@@ -7,12 +7,11 @@ complete, self-contained statement). Also writes worker/src/chunks.js manifest.
 
 Usage:
   build.py --data ~/workspace/biggest-html/data --out /tmp/bigbuild \
-      [--chunk-mib 20] [--max-cities 1000000] [--pi-digits 100000]
-  --max-cities 0 means no limit; default is 1,000,000.
+      [--chunk-mib 20] [--max-cities 0] [--pi-digits 100000]
+  --max-cities 0 means no limit.
 """
 import argparse
 import csv
-import heapq
 import json
 import os
 import subprocess
@@ -65,33 +64,18 @@ def js_str(s):
     return json.dumps(s, ensure_ascii=False).replace("</", "<\\/")
 
 
-def city_js_batch(rows):
-    """Serialize one bounded GeoNames batch for native JSON.parse in browser."""
-    payload = json.dumps(
-        [[round(lat, 4), round(lon, 4), pop, name]
-         for lat, lon, pop, name in rows],
-        ensure_ascii=False, separators=(",", ":"), allow_nan=False,
-    )
-    return "C.push(...JSON.parse(%s));\n" % js_str(payload)
-
-
 # ---------------------------------------------------------------- data loaders
 
 def load_cities(path, max_cities):
-    """GeoNames populated places -> (lat, lon, population, name), pop-desc.
-
-    A bounded build retains only its most populous N rows while reading the
-    source, rather than holding all 5M+ source rows before slicing. Negative
-    source order breaks population ties to match Python's stable full sort.
-    """
+    """GeoNames allCountries.txt -> list of (lat, lon, pop, name), pop-desc."""
     rows = []
-    bounded = max_cities > 0
     with open(path, encoding="utf-8") as f:
-        for ordinal, line in enumerate(f):
+        for line in f:
             p = line.rstrip("\n").split("\t")
             if len(p) < 19:
                 continue
-            if not p[7].startswith("PPL"):
+            fcode = p[7]
+            if not fcode.startswith("PPL"):
                 continue
             try:
                 lat = float(p[4]); lon = float(p[5]); pop = int(p[14] or 0)
@@ -100,19 +84,11 @@ def load_cities(path, max_cities):
             name = p[1] or p[2]
             if not name:
                 continue
-            if bounded:
-                item = (pop, -ordinal, lat, lon, name)
-                if len(rows) < max_cities:
-                    heapq.heappush(rows, item)
-                elif item > rows[0]:
-                    heapq.heapreplace(rows, item)
-            else:
-                rows.append((pop, ordinal, lat, lon, name))
-    if bounded:
-        rows.sort(key=lambda r: (-r[0], -r[1]))
-    else:
-        rows.sort(key=lambda r: -r[0])
-    return [(lat, lon, pop, name) for pop, _ordinal, lat, lon, name in rows]
+            rows.append((pop, lat, lon, name))
+    rows.sort(key=lambda r: -r[0])
+    if max_cities:
+        rows = rows[:max_cities]
+    return [(lat, lon, pop, name) for pop, lat, lon, name in rows]
 
 
 def load_stars(path, mag_limit=6.5):
@@ -251,10 +227,6 @@ input.search:focus{border-color:var(--acc)}
 .clock .c{font-size:13px;color:var(--mut);margin-top:4px}
 .clock .z{font-size:11px;color:#5b6b8c}
 .notes{margin-top:16px;font-size:12.5px;color:#5b6b8c}
-details.sources{max-width:900px;margin:18px auto 0;text-align:left;color:var(--mut);font-size:12px;line-height:1.7}
-details.sources summary{cursor:pointer;color:var(--acc);text-align:center}
-details.sources p{margin:10px 0}
-details.sources a{color:var(--acc)}
 footer{border-top:1px solid var(--line);margin-top:80px;padding:46px 22px 70px;text-align:center;color:var(--mut);font-size:13.5px}
 footer .big{font-size:15px;color:var(--fg);margin-bottom:10px}
 .stat{display:inline-block;margin:6px 10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 18px}
@@ -300,7 +272,7 @@ footer .big{font-size:15px;color:var(--fg);margin-bottom:10px}
 </section>
 <section class="block" id="earth">
 <div class="kicker">TERRA</div><h2>地球馆 · 旋转的人类聚居点</h2>
-<div class="desc">图面按稳定间隔抽样呈现 <b>GeoNames 地理数据库</b>中的居民点（PPL 类）；每个点都有真实坐标，点大小对应<b>人口规模</b>。下方计数器显示完整载入的居民点记录数，图面最多绘制 120,000 个点以免动画反复处理全部数据。</div>
+<div class="desc">下方每一个光点都是 <b>GeoNames 地理数据库</b>中的一个真实居民点（PPL 类），按经纬度投影到旋转地球仪上。光点大小对应<b>人口规模</b>。数据随页面分片陆续载入，右下角计数器实时显示已载入数量。</div>
 <div class="panel"><canvas class="cv" id="earthCv" height="560"></canvas>
 <div class="notes" style="display:flex;justify-content:space-between;flex-wrap:wrap"><span>数据源：GeoNames allCountries（Creative Commons Attribution 4.0）</span><span id="cityCount" style="color:var(--acc)">载入中…</span></div></div>
 </section>
@@ -343,19 +315,7 @@ footer .big{font-size:15px;color:var(--fg);margin-bottom:10px}
 <footer>
 <div class="big">世界最最最大的 HTML · 知识宇宙展览站</div>
 <div id="footStats"></div>
-<div class="notes" style="max-width:860px;margin:14px auto 0">数据来源：GeoNames、HYG 恒星星表、Unicode Unihan、NASA 行星参数。页面绘图不依赖图片或外部资源。<br>本单页 HTML 共 <b id="footBytes"></b>，构建时使用 <b id="footChunks"></b> 个分片；下载后可作为一个文件打开。</div>
-<details class="sources"><summary>数据来源与许可</summary>
-<p>居民点：GeoNames allCountries 中的 PPL 居民点记录，按人口筛选。GeoNames 数据依据 <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> 使用；来源：<a href="https://www.geonames.org/">GeoNames</a>。</p>
-<p>恒星：摘录自 HYG Database v3，来源 <a href="https://github.com/astronexus/HYG-Database">Astronexus HYG Database</a>；该作品采用 <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>。本页面对原始记录作了筛选与格式转换。</p>
-<p>汉字字段：Unicode Unihan（kMandarin、kRSUnicode）。下列 Unicode License V3 声明随数据副本提供：</p>
-<pre>UNICODE LICENSE V3 — COPYRIGHT AND PERMISSION NOTICE
-Copyright © 1991-2026 Unicode, Inc.
-Permission is hereby granted, free of charge, to any person obtaining a copy of data files and any associated documentation (the “Data Files”) or software and any associated documentation (the “Software”) to deal in the Data Files or Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, and/or sell copies of the Data Files or Software, and to permit persons to whom the Data Files or Software are furnished to do so, provided that either (a) this copyright and permission notice appear with all copies of the Data Files or Software, or (b) this copyright and permission notice appear in associated Documentation.
-THE DATA FILES AND SOFTWARE ARE PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF THIRD PARTY RIGHTS.
-IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA FILES OR SOFTWARE.
-Except as contained in this notice, the name of a copyright holder shall not be used in advertising or otherwise to promote the sale, use or other dealings in these Data Files or Software without prior written authorization of the copyright holder.</pre>
-<p>完整许可文本：<a href="https://www.unicode.org/license.txt">Unicode License V3</a>。行星参数沿用原作品中的 NASA 数据说明。</p>
-</details>
+<div class="notes" style="max-width:860px;margin:14px auto 0">数据来源：GeoNames（CC BY 4.0）、Unicode Unihan、HYG 恒星星表、NASA 行星参数。页面全部内容由代码生成与绘制，零图片、零外部资源。<br>本单页 HTML 共 <b id="footBytes"></b>，由 <b id="footChunks"></b> 个 ≤25MiB 分片在 Cloudflare 边缘拼接为一次响应发出。</div>
 <div class="sig">open-source · 2026</div>
 </footer>
 """
@@ -545,8 +505,7 @@ function draw(now){
  if(lastFrame)ang+=Math.min(50,now-lastFrame)*0.00012;
  lastFrame=now;frame++;
  const oldCount=sourceCount;preparePlaces();
- const drawStep=Math.max(1,Math.ceil(C.length/120000));
- for(let i=0;i<C.length;i+=drawStep){
+ for(let i=0;i<C.length;i++){
   const c=C[i],lo=c[1]+ang,X=c[4]*Math.sin(lo),Y=c[5],Z=c[4]*Math.cos(lo);
   if(Z<=0.02)continue;
   const sx=cx+R*X,sy=cy-R*Y,a=0.2+0.8*Z,pop=c[2];
@@ -784,8 +743,7 @@ def main():
     ap.add_argument("--data", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--chunk-mib", type=int, default=20)
-    ap.add_argument("--max-cities", type=int, default=1_000_000,
-                    help="largest population-ranked places to include (default: 1,000,000; 0 means all, potentially very large)")
+    ap.add_argument("--max-cities", type=int, default=0)
     ap.add_argument("--pi-digits", type=int, default=100000)
     ap.add_argument("--worker-src", required=True,
                     help="worker/src dir; chunks.js manifest is written here")
@@ -827,14 +785,12 @@ def main():
         w.write("S.push([%.4f,%.4f,%.2f,%s]);\n" % (ra, dec, mag, js_str(name)))
     w.write("</script>\n")
     # cities (the bulk)
-    for start in range(0, len(cities), 25000):
-        batch = cities[start:start + 25000]
-        w.write('<script>"use strict";\n')
-        w.write(city_js_batch(batch))
-        w.write("</script>\n")
-        emitted = start + len(batch)
-        if emitted % 500000 == 0:
-            print("      ...%s cities emitted" % fmt_int(emitted), flush=True)
+    w.write('<script>"use strict";\n')
+    for i, (lat, lon, pop, name) in enumerate(cities):
+        w.write("C.push([%.4f,%.4f,%d,%s]);\n" % (lat, lon, pop, js_str(name)))
+        if (i + 1) % 500000 == 0:
+            print("      ...%s cities emitted" % fmt_int(i + 1), flush=True)
+    w.write("</script>\n")
     # hanzi
     w.write('<script>"use strict";\n')
     for ch, pinyin, rad, st in hanzi:

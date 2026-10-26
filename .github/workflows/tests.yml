@@ -12,6 +12,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install original audio generator dependency
+        run: pip install numpy==2.4.2
       - name: Run generator tests
         run: python -m unittest discover -s tests -v
       - uses: actions/setup-node@v4
@@ -26,3 +28,72 @@ jobs:
         run: npm ci --prefix worker
       - name: Validate Worker bundle
         run: cd worker && npx wrangler deploy --dry-run
+
+  folded-atlas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build self-contained editions
+        run: |
+          python gen/atlas.py
+          python gen/atlas.py --count 262144 --html artifacts/folded-atlas-large.html
+          python gen/atlas.py --count 2097152 --html artifacts/folded-atlas-expedition.html
+      - name: Install browser test tools (not shipped in HTML)
+        run: |
+          pip install playwright==1.58.0
+          python -m playwright install --with-deps chromium firefox
+          curl --fail --location --retry 2 https://cdn.jsdelivr.net/npm/axe-core@4.11.0/axe.min.js -o artifacts/axe.min.js
+      - name: Offline Chromium and Firefox, mobile and desktop
+        run: |
+          python tests/browser_atlas.py
+          ATLAS_HTML=artifacts/folded-atlas-large.html python tests/browser_atlas.py
+          python tests/scale_atlas.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: folded-atlas-html-and-evidence
+          path: |
+            artifacts/folded-atlas*.html
+            artifacts/*-results.json
+            artifacts/*.png
+
+  echo-workshop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build and test dependencies (not shipped in HTML)
+        run: |
+          pip install numpy==2.4.2 playwright==1.58.0 psutil==7.2.2
+          python -m playwright install --with-deps chromium firefox
+      - name: Build two standalone sample instruments
+        run: |
+          python gen/echo.py --out artifacts/echo-sketch.html --low 36 --high 71 --layers 1 --rate 24000 --mono
+          python gen/echo.py --out artifacts/echo-studio.html --low 36 --high 83 --layers 2 --rate 48000
+          curl --fail --location --retry 2 https://cdn.jsdelivr.net/npm/axe-core@4.11.0/axe.min.js -o artifacts/axe.min.js
+      - name: Independently verify every embedded WAV and run unit regressions
+        run: |
+          python tests/verify_echo.py artifacts/echo-sketch.html
+          python tests/verify_echo.py artifacts/echo-studio.html
+          python -m unittest discover -s tests -v
+      - name: Offline Chromium and Firefox, 360px and 1440px, actual playback and exports
+        run: |
+          ECHO_HTML=artifacts/echo-sketch.html python tests/browser_echo.py
+          ECHO_HTML=artifacts/echo-studio.html python tests/browser_echo.py
+          python tests/scale_echo.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: echo-workshop-html-and-evidence
+          path: |
+            artifacts/echo-*.html
+            artifacts/echo-*.json
+            artifacts/echo-*.png
+            artifacts/echo-*-mix.wav
