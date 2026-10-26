@@ -25,11 +25,13 @@ with sync_playwright() as pw:
    try:
     page.goto(file.as_uri(),wait_until='load',timeout=180000);row['loadSeconds']=round(time.monotonic()-t,3);row['initial']=page.evaluate('echoDiagnostics()')
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-    t=time.monotonic();page.locator('#play').click();page.wait_for_function('echoDiagnostics().playing',timeout=30000);row['playReadySeconds']=round(time.monotonic()-t,3);page.wait_for_timeout(5000);page.locator('#stop').click()
-    page.locator('#octave').select_option(str((row['initial']['samples']>600 and 84)or 72))
+    t=time.monotonic();page.locator('#play').click();page.wait_for_function('echoDiagnostics().playing',timeout=30000);page.wait_for_function('echoDiagnostics().signalPeak>0.0001',timeout=20000);row['playReadySeconds']=round(time.monotonic()-t,3);page.wait_for_timeout(5000);page.locator('#stop').click()
+    page.locator('#octave').select_option(page.locator('#octave option').last.get_attribute('value'))
     page.locator('.white').last.click(position={'x':10,'y':100});page.wait_for_timeout(500)
     page.get_by_role('button',name='查看第8小节',exact=True).click();t=time.monotonic();page.locator('.step').last.click();row['editSeconds']=round(time.monotonic()-t,3)
-    row['final']=page.evaluate('echoDiagnostics()');row['errors']=errs;row['completed']=True
+    row['final']=page.evaluate('echoDiagnostics()');assert not errs,errs;assert row['final']['decodeFailures']==0 and row['final']['cache']<=24 and row['final']['maxActive']<=32,row['final'];row['errors']=errs;row['completed']=True
    except Exception as e:row['completed']=False;row['error']=repr(e)
    finally:
     running=False;thread.join();row['peakProcessTreeRSSBytes']=max(mem,default=0);row['tailProcessTreeRSSBytes']=mem[-1] if mem else None;rows.append(row);(out/'echo-scale-results.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2));print(json.dumps(row,ensure_ascii=False),flush=True);ctx.close();browser.close()
+
+assert rows and all(row.get("completed") for row in rows), "Scale experiment failed; inspect artifacts/echo-scale-results.json"

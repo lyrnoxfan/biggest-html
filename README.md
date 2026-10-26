@@ -29,7 +29,7 @@ python tests/verify_echo.py artifacts/echo-studio.html
 
 ### 实测范围与取舍
 
-以下是在 Linux 上以本地 `file://`、断网浏览器所做的实际测试，不是用户手机的实测。Chromium 360×800 使用 4 倍 CPU 节流；1440×900 为 1 倍。Firefox 没有 CPU 节流。加载时间包括 HTML 解析与首绘；进程树 RSS 是测试驱动与浏览器子进程的 RSS 总和，共享页可能重复计算，不能当作设备最低内存要求。
+以下是在 Linux 上以本地 `file://`、断网浏览器所做的实际测试，不是用户手机的实测。Chromium 360×800 使用 4 倍 CPU 节流；1440×900 为 1 倍。Firefox 没有 CPU 节流。加载时间包括 HTML 解析与首绘；进程树 RSS 是 Playwright 驱动的各浏览器后代进程 RSS 总和（不含驱动本身），共享页可能重复计算，不能当作设备最低内存要求。
 
 | 文件 | 浏览器 / 视口 | 加载 | 首次开始播放 | 进程树 RSS 峰值 |
 |---|---|---:|---:|---:|
@@ -49,10 +49,20 @@ python tests/verify_echo.py artifacts/echo-studio.html
 python -m unittest discover -s tests -v
 python tests/verify_echo.py artifacts/echo-sketch.html
 python tests/verify_echo.py artifacts/echo-studio.html
-# 全浏览器尺寸矩阵（需安装 Playwright 与浏览器）
+# 全浏览器尺寸矩阵（需安装 Playwright 与浏览器；Linux 无声服务器还需 PulseAudio 音频输出端）
 ECHO_HTML=artifacts/echo-sketch.html .venv/bin/python tests/browser_echo.py
 ECHO_HTML=artifacts/echo-studio.html .venv/bin/python tests/browser_echo.py
 ```
+
+要复现较大的边界实验（非推荐手机版本）：
+
+```bash
+python gen/echo.py --out artifacts/echo-workshop.html --low 24 --high 95 --layers 3 --rate 48000
+python tests/verify_echo.py artifacts/echo-workshop.html
+python tests/scale_echo.py
+```
+
+CI 为 Firefox 启动 PulseAudio 空输出端，它提供真实 Web Audio 时钟与解码输出；测试读取输出分析器的非零信号，不用伪造 AudioContext 或跳过发声断言。实测没有扬声器的听音验收。
 
 ### 来源与许可
 

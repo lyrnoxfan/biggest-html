@@ -73,6 +73,14 @@ jobs:
         run: |
           pip install numpy==2.4.2 playwright==1.58.0 psutil==7.2.2
           python -m playwright install --with-deps chromium firefox
+      - name: Start a real headless audio sink for Firefox Web Audio
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=echo_ci
+          pactl set-default-sink echo_ci
+          pactl info
       - name: Build two standalone sample instruments
         run: |
           python gen/echo.py --out artifacts/echo-sketch.html --low 36 --high 71 --layers 1 --rate 24000 --mono

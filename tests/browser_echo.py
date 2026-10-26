@@ -15,6 +15,7 @@ results=[]
 with sync_playwright() as pw:
  for engine in (['chromium'] if quick else ['chromium','firefox']):
   for width in ([360] if quick else [360,1440]):
+   print(f'Acceptance {HTML.name}: {engine} {width}px',flush=True)
    browser=getattr(pw,engine).launch()
    c=browser.new_context(viewport={'width':width,'height':900 if width>640 else 800},offline=True,reduced_motion='reduce',accept_downloads=True,has_touch=engine=='chromium' and width==360)
    p=c.new_page();p.set_default_timeout(20000);errors=[];requests=[]
@@ -29,7 +30,11 @@ with sync_playwright() as pw:
    title=p.locator('h1').bounding_box(); assert title['x']>=0 and title['x']+title['width']<=width
    initial=p.evaluate('echoDiagnostics()');assert initial['audioState']=='not-started' and initial['cache']==0
    p.screenshot(path=str(OUT/f'{HTML.stem}-{engine}-{width}.png'))
-   p.locator('#play').click();p.wait_for_function('echoDiagnostics().playing');p.wait_for_function('echoDiagnostics().signalPeak>0.0001');signal_peak=p.evaluate('echoDiagnostics().signalPeak');p.wait_for_timeout(1800)
+   p.locator('#play').click()
+   try:p.wait_for_function('echoDiagnostics().playing');p.wait_for_function('echoDiagnostics().signalPeak>0.0001')
+   except Exception:
+    print(json.dumps({'engine':engine,'viewport':width,'status':p.locator('#status').inner_text(),'diagnostics':p.evaluate('echoDiagnostics()'),'errors':errors},ensure_ascii=False),flush=True);raise
+   signal_peak=p.evaluate('echoDiagnostics().signalPeak');p.wait_for_timeout(1800)
    assert p.evaluate('echoDiagnostics().audioState')=='running'
    assert p.evaluate('echoDiagnostics().active')>0
    p.locator('#play').click();assert not p.evaluate('echoDiagnostics().playing')
