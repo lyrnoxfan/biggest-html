@@ -37,8 +37,8 @@ python tests/verify_echo.py artifacts/echo-studio.html
 | 26.1 MiB sketch | Firefox / 360 | 0.35 s | 0.74 s | 787 MB |
 | 277.1 MiB studio | Chromium / 360，4× | 6.74 s | 2.26 s | 999 MB |
 | 277.1 MiB studio | Firefox / 360 | 1.45 s | 1.77 s | 1,172 MB |
-| 622.9 MiB 压力版 | Chromium / 360，4× | 14.77 s | 2.29 s | 1,746 MB |
-| 622.9 MiB 压力版 | Firefox / 360 | 2.82 s | 2.34 s | 1,541 MB |
+| 623.1 MiB 压力版 | Chromium / 360，4× | 14.77 s | 2.29 s | 1,746 MB |
+| 623.1 MiB 压力版 | Firefox / 360 | 2.82 s | 2.34 s | 1,541 MB |
 
 最后一档只作为边界实验，不作为推荐交付；其文件超过 600 MiB、移动视口需约 15 秒才完成加载。推荐从 26.1 MiB 版开始。277.1 MiB 版在受测桌面浏览器的移动视口中可用，但解析耗时和内存占用明显更高；未在 Android/iOS 真机、Safari 或旧 WebView 验收，不能据桌面浏览器推断这些环境一定能打开。
 
